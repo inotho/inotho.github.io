@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market 101 - Stock Trading Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="loader-container">
+        <div class="loader" id="loadingCircle"></div>
+    </div>
+    <div id="content">
+    <header>
+        <h1>Lexington | Bourse 101</h1>
+        <div class="user-info">
+            <span id="user-balance">€10,000.00</span>
+        </div>
+    </header>
+
+    <nav>
+        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="market">Marchés</button>
+        <button class="nav-btn" data-view="portfolio">Positions</button>
+        <button class="nav-btn" data-view="history">Historique</button>
+    </nav>
+
+    <main>
+        <!-- Dashboard View -->
+        <section id="dashboard" class="view active">
+            <h2>Dashboard</h2>
+            <div class="dashboard-summary">
+                <div class="summary-card">
+                    <h3>Valeur totale</h3>
+                    <p id="total-value">€10,000.00</p>
+                </div>
+                <div class="summary-card">
+                    <h3>Valeur du portefeuille</h3>
+                    <p id="portfolio-value">€0.00</p>
+                </div>
+                <div class="summary-card">
+                    <h3>Soldes de trésorerie (Espèces)</h3>
+                    <p id="cash-balance">€10,000.00</p>
+                </div>
+            </div>
+            <div class="simulation-controls">
+                <p class="current-date" id="current-date">Année 1</p>
+                <button id="next-day-btn" class="btn primary-btn">Avancer</button>
+            </div>
+            <div class="recent-activity">
+                <h3>Activités récentes</h3>
+                <ul id="recent-transactions">
+                    <li class="empty-state">Aucune transcription récente.</li>
+                </ul>
+            </div>
+            <div class="top-holdings">
+                <h3>Principaux titres</h3>
+                <ul id="top-holdings">
+                    <li class="empty-state">Aucun titre.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Market View -->
+        <section id="market" class="view">
+            <h2>Marchés</h2>
+            <div class="search-container">
+                <input type="text" id="stock-search" placeholder="Rechercher des actions...">
+            </div>
+            <ul id="stock-list" class="stock-list">
+                <!-- Stock items will be populated here -->
+                <li class="loading">Chargement des actions...</li>
+            </ul>
+        </section>
+
+        <!-- Portfolio View -->
+        <section id="portfolio" class="view">
+            <h2>Vos positions</h2>
+            <ul id="portfolio-list" class="stock-list">
+                <li class="empty-state">Vous ne possédez pas d'action.</li>
+            </ul>
+        </section>
+
+        <!-- History View -->
+        <section id="history" class="view">
+            <h2>Historique</h2>
+            <ul id="transaction-history" class="transaction-list">
+                <li class="empty-state">Aucun historique de transaction.</li>
+            </ul>
+        </section>
+    </main>
+
+    <!-- Stock Detail Modal -->
+    <div id="stock-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div id="stock-detail">
+                <h2 id="modal-stock-name">Stock Name</h2>
+                <p id="modal-stock-symbol">SYMB</p>
+                <p id="modal-stock-price">€0.00</p>
+                <p id="modal-stock-change">0.00%</p>
+                <div class="stock-description">
+                    <p id="modal-stock-description">Stock description goes here.</p>
+                </div>
+                
+                <div class="trade-form">
+                    <div class="form-group">
+                        <label for="trade-quantity">Quantité:</label>
+                        <input type="number" id="trade-quantity" min="1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="trade-total">Coût total:</label>
+                        <span id="trade-total">€0.00</span>
+                    </div>
+                    <div class="trade-buttons">
+                        <button id="buy-button" class="btn buy-btn">Acheter</button>
+                        <button id="sell-button" class="btn sell-btn" disabled>Vendre</button>
+                    </div>
+                </div>
+                
+                <div class="owned-info">
+                    <p>Position: <span id="owned-quantity">0</span> actions</p>
+                    <p>Valeur: <span id="owned-value">€0.00</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    <script src="marketData.js"></script>
+    <script src="witsoClient.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
