@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inotho | Marché 101</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation Bar -->
+        <header class="top-nav">
+            <div class="header-content">
+                <div class="logo-left">
+                    <button class="btn-icon" id="backBtn">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m15 18-6-6 6-6"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="portfolio-center">
+                    <div class="portfolio-summary-inline" id="portfolioSummaryInline">
+                        <span class="portfolio-value-inline" id="portfolioTotalValueInline">€10,000.00</span>
+                        <span class="portfolio-change-value-inline" id="portfolioChangeValueInline">€0.00 (0.00%)</span>
+                        <button class="btn-icon" id="portfolioExpandBtnInline">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6,9 12,15 18,9"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="search-right">
+                    <button class="btn-icon" id="searchToggleBtn">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Search Modal -->
+        <div class="search-modal" id="searchModal" style="display: none;">
+            <div class="search-modal-header">
+                <div class="search-input-container form-input">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" placeholder="Rechercher des instruments..." id="searchInput" autocomplete="off">
+                </div>
+                <button class="btn-icon" id="closeSearchBtn">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="search-results" id="searchResults">
+                <!-- Search results will be populated here -->
+            </div>
+        </div>
+
+        <!-- Portfolio Details Bar -->
+        <div class="portfolio-details-bar" id="portfolioDetailsBar" style="display: none;">
+            <div class="portfolio-details-grid">
+                <div class="portfolio-detail-item">
+                    <span class="detail-label">Pouvoir d'Achat</span>
+                    <span class="detail-value" id="detailBuyingPower">€10,000.00</span>
+                </div>
+                <div class="portfolio-detail-item">
+                    <span class="detail-label">Total des Espèces</span>
+                    <span class="detail-value" id="detailCash">€10,000.00</span>
+                </div>
+                <div class="portfolio-detail-item">
+                    <span class="detail-label">P&L Jour</span>
+                    <span class="detail-value" id="detailDayPL">€0.00 (0.00%)</span>
+                </div>
+                <div class="portfolio-detail-item">
+                    <span class="detail-label">P&L Total</span>
+                    <span class="detail-value" id="detailTotalPL">€0.00 (0.00%)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Content Container -->
+        <div class="tab-content-container">
+            <!-- Market Tab -->
+            <div class="tab-content active" id="marketTab">
+                <div class="market-layout">
+                    <!-- Market Data Table -->
+                    <section class="market-data-section">
+                        <div class="section-header">
+                            <h2>Données du marché</h2>
+                        </div>
+                        
+                        <!-- Market Search Bar -->
+                        <div class="market-search-container">
+                            <div class="market-search-bar">
+                                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="m21 21-4.35-4.35"></path>
+                                </svg>
+                                <input type="text" placeholder="Rechercher des instruments..." id="marketSearchInput">
+                            </div>
+                        </div>
+                        
+                        <div class="market-table-container">
+                            <table class="market-table" id="marketTable">
+                                <tbody id="marketTableBody">
+                                    <!-- Market data will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+
+            <!-- Portfolio Tab -->
+            <div class="tab-content" id="portfolioTab">
+                <div class="portfolio-layout">
+                    <div class="portfolio-header">
+                        <h2>Portefeuille</h2>
+                        <div class="portfolio-toggle">
+                            <button class="btn-toggle active" data-view="overview">Aperçu</button>
+                            <button class="btn-toggle" data-view="positions">Positions</button>
+                        </div>
+                    </div>
+
+                    <div class="portfolio-overview" id="portfolioOverview">
+                        <div class="balance-card">
+                            <div class="balance-item">
+                                <span class="balance-label">Liquidités</span>
+                                <span class="balance-value" id="cashBalance">€10,000.00</span>
+                            </div>
+                            <div class="balance-item">
+                                <span class="balance-label">Investi</span>
+                                <span class="balance-value" id="investedValue">€0.00</span>
+                            </div>
+                            <div class="balance-item total">
+                                <span class="balance-label">Total</span>
+                                <span class="balance-value" id="totalValue">€10,000.00</span>
+                            </div>
+                        </div>
+                        
+                        <div class="day-performance">
+                            <div class="performance-item">
+                                <span class="performance-label">Aujourd'hui</span>
+                                <span class="performance-value" id="dayChange">€0.00 (0.00%)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="positions-list" id="positionsList" style="display: none;">
+                        <!-- Positions will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Tab -->
+            <div class="tab-content" id="historyTab">
+                <div class="history-layout">
+                    <div class="sidebar-header">
+                        <h2>Historique des ordres</h2>
+                    </div>
+                    <div class="order-history">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Heure</th>
+                                    <th>Symbole</th>
+                                    <th>Côté</th>
+                                    <th>Qté</th>
+                                    <th>Prix</th>
+                                    <th>Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orderHistory">
+                                <!-- Order history will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trading Section -->
+            <div class="trading-section" id="tradingTab">
+                <div class="trading-layout">
+                    <!-- Stock Details Section -->
+                    <div class="stock-details-section">
+                        <div class="stock-header">
+                            <div class="stock-info">
+                                <h2 class="stock-symbol" id="tradingInstrumentSymbol">-</h2>
+                                <p class="stock-name" id="tradingInstrumentName">-</p>
+                            </div>
+                            <div class="stock-price-info">
+                                <div class="current-price" id="tradingCurrentPrice">€0.00</div>
+                                <div class="price-change" id="tradingPriceChange">€0.00 (0.00%)</div>
+                            </div>
+                            <button class="btn-icon" onclick="marketSimulator.closeTradingSection()">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Chart Section -->
+                    <div class="trading-chart-section">
+                        <div class="chart-container">
+                            <canvas id="tradingChart" width="400" height="200"></canvas>
+                            <div class="chart-timeline">
+                                <div class="timeline-point active" data-period="1D">
+                                    <div></div>
+                                    <span class="timeline-label">1J</span>
+                                </div>
+                                <div class="timeline-point" data-period="1W">
+                                    <div></div>
+                                    <span class="timeline-label">1S</span>
+                                </div>
+                                <div class="timeline-point" data-period="1M">
+                                    <div></div>
+                                    <span class="timeline-label">1M</span>
+                                </div>
+                                <div class="timeline-point" data-period="3M">
+                                    <div></div>
+                                    <span class="timeline-label">3M</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Order Form Section -->
+                    <div class="order-form-section">
+
+                        <div class="order-form">
+                            <div class="form-group">
+                                <div class="order-side-switch">
+                                    <label class="switch">
+                                        <input type="checkbox" id="orderSideSwitch">
+                                        <span class="slider">
+                                            <span class="switch-text-left">Achat</span>
+                                            <span class="switch-text-right">Vente</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="input-row">
+                                    <div class="input-field">
+                                        <label for="tradingQuantity">Quantité</label>
+                                        <input type="number" id="tradingQuantity" min="1" value="1" class="quantity-input form-input">
+                                    </div>
+                                    <div class="input-arrow">
+                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="m9 18 6-6-6-6"/>
+                                        </svg>
+                                    </div>
+                                    <div class="input-field">
+                                        <label for="tradingPrice">Prix (€)</label>
+                                        <div class="price-input-container">
+                                            <input type="number" id="tradingPrice" step="0.01" min="0" class="price-input form-input" readonly>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <div class="order-summary">
+                                <div class="summary-row">
+                                    <span>Valeur de l'Ordre</span>
+                                    <span id="tradingOrderValue">€0.00</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Commission</span>
+                                    <span id="tradingCommission">€0.00</span>
+                                </div>
+                                <div class="summary-row total">
+                                    <span>Coût Total</span>
+                                    <span id="tradingTotalCost">€0.00</span>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" id="tradingExecuteBtn">
+                                Passer l'ordre
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Tab Navigation -->
+        <nav class="bottom-tabs">
+            <button class="btn-tab active" data-tab="market">
+                <span class="tab-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 3v18h18"></path>
+                        <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path>
+                    </svg>
+                </span>
+                <span class="tab-label">Marché</span>
+            </button>
+            <button class="btn-tab" data-tab="portfolio">
+                <span class="tab-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                </span>
+                <span class="tab-label">Portefeuille</span>
+            </button>
+            <button class="btn-tab" data-tab="history">
+                <span class="tab-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14,2 14,8 20,8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10,9 9,9 8,9"></polyline>
+                    </svg>
+                </span>
+                <span class="tab-label">Historique</span>
+            </button>
+        </nav>
+    </div>
+
+
+    <script src="market-simulator.js"></script>
+</body>
+</html>
