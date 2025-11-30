@@ -2,7 +2,7 @@
 const INITIAL_BALANCE = 10000;
 const INITIAL_YEAR = 1;
 const STOCK_UPDATE_INTERVAL = 5000; // 5 seconds
-const TIMELINE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25]
+const TIMELINE = [1, 3, 5, 10, 15, 25]
 
 // State management
 let state = {
@@ -45,6 +45,7 @@ const ownedQuantityEl = document.getElementById('owned-quantity');
 const ownedValueEl = document.getElementById('owned-value');
 const stockSearchInput = document.getElementById('stock-search');
 const nextDayBtn = document.getElementById('next-day-btn');
+const resetBtn = document.getElementById('reset-btn');
 const currentDateEl = document.getElementById('current-date');
 
 // Initialize the application
@@ -146,6 +147,47 @@ async function advanceToNextYear() {
     saveState();
 }
 
+// Reset the application to initial state
+async function resetApplication() {
+    if (!confirm('Êtes-vous sûr de vouloir réinitialiser l\'application ? Toutes vos données seront perdues.')) {
+        return;
+    }
+    
+    loadingContainer.style.display = 'flex';
+    contentDiv.style.display = 'none';
+    
+    // Clear localStorage
+    localStorage.removeItem('marketSimState');
+    
+    // Reset state to initial values
+    state = {
+        balance: INITIAL_BALANCE,
+        portfolio: {},
+        transactions: [],
+        stocks: [],
+        currentView: 'dashboard',
+        selectedStock: null,
+        timelineIdx: 0,
+    };
+    
+    // Close modal if open
+    if (stockModal) {
+        stockModal.style.display = 'none';
+    }
+    
+    // Regenerate stocks
+    await generateStocks();
+    
+    // Update UI
+    updateUI();
+    
+    // Reset view to dashboard
+    changeView('dashboard');
+    
+    loadingContainer.style.display = 'none';
+    contentDiv.style.display = 'block';
+}
+
 // Setup event listeners
 function setupEventListeners() {
     // Navigation
@@ -192,6 +234,9 @@ function setupEventListeners() {
     
     // Next day button
     nextDayBtn.addEventListener('click', advanceToNextYear);
+    
+    // Reset button
+    resetBtn.addEventListener('click', resetApplication);
 }
 
 // Change current view
@@ -230,6 +275,11 @@ function updateUI() {
     renderTopHoldings();
     updatePortfolioValue();
     currentDateEl.textContent = `Année ${TIMELINE[state.timelineIdx]}`;
+    
+    // Show reset button only at year 25 (last year in timeline)
+    const isLastYear = state.timelineIdx >= TIMELINE.length - 1;
+    resetBtn.style.display = isLastYear ? 'inline-block' : 'none';
+    nextDayBtn.style.display = isLastYear ? 'none' : 'inline-block';
 }
 
 // Update balance display
