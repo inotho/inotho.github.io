@@ -1,7 +1,6 @@
 // Constants
-const INITIAL_BALANCE = 10000;
+const INITIAL_BALANCE = 1000;
 const INITIAL_YEAR = 1;
-const STOCK_UPDATE_INTERVAL = 5000; // 5 seconds
 const TIMELINE = [1, 3, 5, 10, 15, 25]
 
 // State management
@@ -14,6 +13,12 @@ let state = {
     selectedStock: null,
     timelineIdx: 0,
 };
+
+// Cache for stock lookups (Map for O(1) access)
+let stockMap = new Map();
+
+// Debounce timer for saveState
+let saveStateTimer = null;
 
 // DOM Elements
 const loadingContainer = document.getElementById('loader-container');
@@ -62,6 +67,8 @@ function init() {
             contentDiv.style.display = 'block';
         })
     } else {
+        // Update stock map cache for loaded stocks
+        updateStockMap();
         updateUI();
         setupEventListeners();
 
@@ -78,9 +85,16 @@ function loadState() {
     }
 }
 
-// Save state to localStorage
+// Save state to localStorage with debouncing
 function saveState() {
-    localStorage.setItem('marketSimState', JSON.stringify(state));
+    // Clear existing timer
+    if (saveStateTimer) {
+        clearTimeout(saveStateTimer);
+    }
+    // Debounce: only save after 300ms of inactivity
+    saveStateTimer = setTimeout(() => {
+        localStorage.setItem('marketSimState', JSON.stringify(state));
+    }, 300);
 }
 
 // Generate fake stocks
@@ -115,6 +129,16 @@ async function generateStocks() {
     });
     
     state.stocks = await Promise.all(stockPromises);
+    // Update stock map cache
+    updateStockMap();
+}
+
+// Update stock map cache for O(1) lookups
+function updateStockMap() {
+    stockMap.clear();
+    state.stocks.forEach(stock => {
+        stockMap.set(stock.symbol, stock);
+    });
 }
 
 async function advanceToNextYear() {
@@ -267,29 +291,45 @@ function changeView(view) {
 
 // Update UI elements
 function updateUI() {
+    // Always update balance and date
     updateBalanceDisplay();
-    renderStockList();
-    renderPortfolioList();
-    renderTransactionHistory();
-    renderRecentTransactions();
-    renderTopHoldings();
-    updatePortfolioValue();
     currentDateEl.textContent = `Année ${TIMELINE[state.timelineIdx]}`;
     
     // Show reset button only at year 25 (last year in timeline)
     const isLastYear = state.timelineIdx >= TIMELINE.length - 1;
     resetBtn.style.display = isLastYear ? 'inline-block' : 'none';
     nextDayBtn.style.display = isLastYear ? 'none' : 'inline-block';
+    
+    // Only render the active view to improve performance
+    switch (state.currentView) {
+        case 'dashboard':
+            renderRecentTransactions();
+            renderTopHoldings();
+            updatePortfolioValue();
+            break;
+        case 'market':
+            renderStockList();
+            break;
+        case 'portfolio':
+            renderPortfolioList();
+            break;
+        case 'history':
+            renderTransactionHistory();
+            break;
+    }
 }
 
 // Update balance display
 function updateBalanceDisplay() {
     let portfolioValue = 0;
     
+    // Use Map for O(1) lookup instead of O(n) find
     Object.keys(state.portfolio).forEach(symbol => {
-        const stock = state.stocks.find(s => s.symbol === symbol);
-        const quantity = state.portfolio[symbol];
-        portfolioValue += stock.price * quantity;
+        const stock = stockMap.get(symbol);
+        if (stock) {
+            const quantity = state.portfolio[symbol];
+            portfolioValue += stock.price * quantity;
+        }
     });
     
     userBalanceEl.textContent = formatCurrency(state.balance + portfolioValue);
@@ -304,7 +344,8 @@ function renderStockList() {
         stock.symbol.toLowerCase().includes(searchTerm)
     );
     
-    stockListEl.innerHTML = '';
+    // Use DocumentFragment to reduce reflows
+    const fragment = document.createDocumentFragment();
     
     if (filteredStocks.length === 0) {
         stockListEl.innerHTML = '<li class="empty-state">No stocks found</li>';
@@ -326,14 +367,15 @@ function renderStockList() {
             </div>
         `;
         li.addEventListener('click', () => openStockDetail(stock));
-        stockListEl.appendChild(li);
+        fragment.appendChild(li);
     });
+    
+    stockListEl.innerHTML = '';
+    stockListEl.appendChild(fragment);
 }
 
 // Render portfolio list
 function renderPortfolioList() {
-    portfolioListEl.innerHTML = '';
-    
     const portfolioStocks = Object.keys(state.portfolio);
     
     if (portfolioStocks.length === 0) {
@@ -341,8 +383,13 @@ function renderPortfolioList() {
         return;
     }
     
+    // Use DocumentFragment to reduce reflows
+    const fragment = document.createDocumentFragment();
+    
     portfolioStocks.forEach(symbol => {
-        const stock = state.stocks.find(s => s.symbol === symbol);
+        const stock = stockMap.get(symbol); // O(1) lookup instead of O(n) find
+        if (!stock) return;
+        
         const quantity = state.portfolio[symbol];
         const value = stock.price * quantity;
         
@@ -360,8 +407,11 @@ function renderPortfolioList() {
             </div>
         `;
         li.addEventListener('click', () => openStockDetail(stock));
-        portfolioListEl.appendChild(li);
+        fragment.appendChild(li);
     });
+    
+    portfolioListEl.innerHTML = '';
+    portfolioListEl.appendChild(fragment);
 }
 
 // Render transaction history
@@ -432,11 +482,12 @@ function renderTopHoldings() {
     
     // Calculate value of each holding
     const holdings = portfolioStocks.map(symbol => {
-        const stock = state.stocks.find(s => s.symbol === symbol);
+        const stock = stockMap.get(symbol); // O(1) lookup instead of O(n) find
+        if (!stock) return null;
         const quantity = state.portfolio[symbol];
         const value = stock.price * quantity;
         return { symbol, name: stock.name, quantity, value };
-    });
+    }).filter(h => h !== null); // Filter out null entries
     
     // Sort by value (highest first) and take top 5
     const topHoldings = holdings
@@ -461,9 +512,11 @@ function updatePortfolioValue() {
     let portfolioValue = 0;
     
     Object.keys(state.portfolio).forEach(symbol => {
-        const stock = state.stocks.find(s => s.symbol === symbol);
-        const quantity = state.portfolio[symbol];
-        portfolioValue += stock.price * quantity;
+        const stock = stockMap.get(symbol); // O(1) lookup instead of O(n) find
+        if (stock) {
+            const quantity = state.portfolio[symbol];
+            portfolioValue += stock.price * quantity;
+        }
     });
     
     portfolioValueEl.textContent = formatCurrency(portfolioValue);
