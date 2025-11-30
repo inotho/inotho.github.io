@@ -12,7 +12,6 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Top Navigation Bar -->
         <header class="top-nav">
             <div class="header-content">
                 <div class="logo-left">
@@ -44,7 +43,6 @@
             </div>
         </header>
 
-        <!-- Search Modal -->
         <div class="search-modal" id="searchModal" style="display: none;">
             <div class="search-modal-header">
                 <div class="search-input-container form-input">
@@ -62,11 +60,9 @@
                 </button>
             </div>
             <div class="search-results" id="searchResults">
-                <!-- Search results will be populated here -->
             </div>
         </div>
 
-        <!-- Portfolio Details Bar -->
         <div class="portfolio-details-bar" id="portfolioDetailsBar" style="display: none;">
             <div class="portfolio-details-grid">
                 <div class="portfolio-detail-item">
@@ -88,18 +84,27 @@
             </div>
         </div>
 
-        <!-- Tab Content Container -->
         <div class="tab-content-container">
-            <!-- Market Tab -->
             <div class="tab-content active" id="marketTab">
                 <div class="market-layout">
-                    <!-- Market Data Table -->
                     <section class="market-data-section">
                         <div class="section-header">
                             <h2>Données du marché</h2>
+                            <div class="year-navigation">
+                                <button class="btn-icon" id="prevYearBtn">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="m15 18-6-6 6-6"/>
+                                    </svg>
+                                </button>
+                                <span class="current-year" id="currentYear">2024</span>
+                                <button class="btn-icon" id="nextYearBtn">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="m9 18 6-6-6-6"/>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                         
-                        <!-- Market Search Bar -->
                         <div class="market-search-container">
                             <div class="market-search-bar">
                                 <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -113,7 +118,6 @@
                         <div class="market-table-container">
                             <table class="market-table" id="marketTable">
                                 <tbody id="marketTableBody">
-                                    <!-- Market data will be populated by JavaScript -->
                                 </tbody>
                             </table>
                         </div>
@@ -122,7 +126,6 @@
                 </div>
             </div>
 
-            <!-- Portfolio Tab -->
             <div class="tab-content" id="portfolioTab">
                 <div class="portfolio-layout">
                     <div class="portfolio-header">
@@ -158,12 +161,10 @@
                     </div>
 
                     <div class="positions-list" id="positionsList" style="display: none;">
-                        <!-- Positions will be populated by JavaScript -->
                     </div>
                 </div>
             </div>
 
-            <!-- History Tab -->
             <div class="tab-content" id="historyTab">
                 <div class="history-layout">
                     <div class="sidebar-header">
@@ -182,17 +183,14 @@
                                 </tr>
                             </thead>
                             <tbody id="orderHistory">
-                                <!-- Order history will be populated by JavaScript -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- Trading Section -->
             <div class="trading-section" id="tradingTab">
                 <div class="trading-layout">
-                    <!-- Stock Details Section -->
                     <div class="stock-details-section">
                         <div class="stock-header">
                             <div class="stock-info">
@@ -212,7 +210,6 @@
                         </div>
                     </div>
 
-                    <!-- Chart Section -->
                     <div class="trading-chart-section">
                         <div class="chart-container">
                             <canvas id="tradingChart" width="400" height="200"></canvas>

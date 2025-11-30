@@ -458,6 +458,35 @@ body {
     line-height: 1;
 }
 
+/* Navigation par Années */
+.year-navigation {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 8px 12px;
+    border: 1px solid #e1e8ed;
+}
+
+.year-navigation .btn-icon {
+    color: #64748b;
+    padding: 6px;
+}
+
+.year-navigation .btn-icon:hover {
+    background: rgba(100, 116, 139, 0.1);
+    color: #1e3a8a;
+}
+
+.current-year {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e3a8a;
+    min-width: 60px;
+    text-align: center;
+}
+
 /* Table de Marché */
 .market-table-container {
     overflow: hidden;
@@ -1308,6 +1337,11 @@ input:checked + .slider .switch-text-right {
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
+    }
+    
+    .year-navigation {
+        width: 100%;
+        justify-content: center;
     }
     
     .section-header h2 {

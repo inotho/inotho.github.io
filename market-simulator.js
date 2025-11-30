@@ -1,59 +1,110 @@
-// DEGIRO-Style Market Simulator Application
+// Annual Market Simulator Application
 class MarketSimulator {
     constructor() {
-        this.stocks = [
-            { symbol: 'AAPL', name: 'Apple Inc.', price: 150.00, change: 0, changePercent: 0, volume: 45000000 },
-            { symbol: 'GOOGL', name: 'Alphabet Inc.', price: 2800.00, change: 0, changePercent: 0, volume: 1200000 },
-            { symbol: 'MSFT', name: 'Microsoft Corp.', price: 300.00, change: 0, changePercent: 0, volume: 28000000 },
-            { symbol: 'AMZN', name: 'Amazon.com Inc.', price: 3200.00, change: 0, changePercent: 0, volume: 3200000 },
-            { symbol: 'TSLA', name: 'Tesla Inc.', price: 800.00, change: 0, changePercent: 0, volume: 85000000 },
-            { symbol: 'META', name: 'Meta Platforms Inc.', price: 250.00, change: 0, changePercent: 0, volume: 18000000 },
-            { symbol: 'NVDA', name: 'NVIDIA Corp.', price: 400.00, change: 0, changePercent: 0, volume: 42000000 },
-            { symbol: 'NFLX', name: 'Netflix Inc.', price: 450.00, change: 0, changePercent: 0, volume: 3500000 }
+        // Base stock data for 2020
+        this.baseStocks = [
+            { symbol: 'AAPL', name: 'Apple Inc.', basePrice: 80.00 },
+            { symbol: 'GOOGL', name: 'Alphabet Inc.', basePrice: 1500.00 },
+            { symbol: 'MSFT', name: 'Microsoft Corp.', basePrice: 200.00 },
+            { symbol: 'AMZN', name: 'Amazon.com Inc.', basePrice: 2000.00 },
+            { symbol: 'TSLA', name: 'Tesla Inc.', basePrice: 400.00 },
+            { symbol: 'META', name: 'Meta Platforms Inc.', basePrice: 200.00 },
+            { symbol: 'NVDA', name: 'NVIDIA Corp.', basePrice: 200.00 },
+            { symbol: 'NFLX', name: 'Netflix Inc.', basePrice: 300.00 }
         ];
 
+        this.currentYear = 2024;
+        this.minYear = 2020;
+        this.maxYear = 2030;
+        this.stocks = [];
+        this.annualData = {};
+        
         this.portfolio = {
             cash: 10000.00,
             holdings: {},
             totalValue: 10000.00,
-            dayStartValue: 10000.00
+            yearStartValue: 10000.00
         };
 
         this.orderHistory = [];
         this.selectedStock = null;
         this.chart = null;
-        this.priceHistory = {};
         this.isMarketOpen = true;
         this.currentOrderType = 'buy';
         this.commissionRate = 0.0025; // 0.25% commission
 
         this.initializeApp();
-        this.startMarketSimulation();
+        this.generateAnnualData();
+        this.updateStocksForCurrentYear();
     }
 
     initializeApp() {
         this.renderStocks();
         this.updatePortfolio();
         this.setupEventListeners();
-        this.initializePriceHistory();
+        this.updateYearDisplay();
     }
 
-    initializePriceHistory() {
-        this.stocks.forEach(stock => {
-            this.priceHistory[stock.symbol] = [];
-            // Generate initial price history (last 100 data points)
-            for (let i = 0; i < 100; i++) {
-                const basePrice = stock.price;
-                const volatility = 0.02; // 2% volatility
-                const randomChange = (Math.random() - 0.5) * volatility;
-                const historicalPrice = basePrice * (1 + randomChange);
-                this.priceHistory[stock.symbol].push({
-                    time: new Date(Date.now() - (100 - i) * 60000), // 1 minute intervals
-                    price: historicalPrice
-                });
+    generateAnnualData() {
+        // Generate realistic annual price changes for each stock
+        this.baseStocks.forEach(stock => {
+            this.annualData[stock.symbol] = {};
+            let currentPrice = stock.basePrice;
+            
+            for (let year = this.minYear; year <= this.maxYear; year++) {
+                // Generate realistic annual returns (-30% to +50%)
+                const annualReturn = (Math.random() - 0.3) * 0.8; // Bias towards positive returns
+                const newPrice = currentPrice * (1 + annualReturn);
+                
+                this.annualData[stock.symbol][year] = {
+                    price: newPrice,
+                    change: newPrice - currentPrice,
+                    changePercent: (annualReturn * 100),
+                    volume: Math.floor(Math.random() * 100000000) + 1000000
+                };
+                
+                currentPrice = newPrice;
             }
         });
     }
+
+    updateStocksForCurrentYear() {
+        this.stocks = this.baseStocks.map(stock => {
+            const yearData = this.annualData[stock.symbol][this.currentYear];
+            return {
+                symbol: stock.symbol,
+                name: stock.name,
+                price: yearData.price,
+                change: yearData.change,
+                changePercent: yearData.changePercent,
+                volume: yearData.volume
+            };
+        });
+    }
+
+    updateYearDisplay() {
+        const yearElement = document.getElementById('currentYear');
+        if (yearElement) {
+            yearElement.textContent = this.currentYear;
+        }
+    }
+
+    changeYear(direction) {
+        const newYear = this.currentYear + direction;
+        if (newYear >= this.minYear && newYear <= this.maxYear) {
+            this.currentYear = newYear;
+            this.updateStocksForCurrentYear();
+            this.updateYearDisplay();
+            this.renderStocks();
+            this.updatePortfolio();
+            
+            // Update trading section if open
+            if (this.selectedStock) {
+                this.updateTradingSection();
+            }
+        }
+    }
+
 
 
     renderStocks() {
@@ -138,7 +189,7 @@ class MarketSimulator {
         
         
         // Update chart
-        this.updateTradingChart(stock.symbol);
+        this.updateTradingChart();
         
         // Reset form
         document.getElementById('tradingQuantity').value = 1;
@@ -243,32 +294,6 @@ class MarketSimulator {
         this.selectedStock = null;
     }
 
-    generateChartData(symbol) {
-        // Generate sample chart data for the symbol
-        const stock = this.stocks.find(s => s.symbol === symbol);
-        if (!stock) return { labels: [], prices: [] };
-        
-        const labels = [];
-        const prices = [];
-        
-        // Generate 24 hours of data (hourly)
-        for (let i = 23; i >= 0; i--) {
-            const time = new Date();
-            time.setHours(time.getHours() - i);
-            labels.push(time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
-            
-            // Generate realistic price movement
-            const basePrice = stock.price;
-            const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
-            const price = basePrice * (1 + variation);
-            prices.push(price);
-        }
-        
-        return {
-            labels: labels,
-            prices: prices
-        };
-    }
 
     updateTradingChart(symbol) {
         const ctx = document.getElementById('tradingChart');
@@ -279,8 +304,10 @@ class MarketSimulator {
             this.tradingChart.destroy();
         }
 
-        // Generate sample data for the chart
-        const data = this.generateChartData(symbol);
+        if (!this.selectedStock) return;
+
+        // Generate annual price data for the chart
+        const data = this.generateAnnualChartData(symbol);
         
         this.tradingChart = new Chart(ctx, {
             type: 'line',
@@ -309,28 +336,43 @@ class MarketSimulator {
                 },
                 scales: {
                     x: {
-                        display: false
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Année'
+                        }
                     },
                     y: {
                         beginAtZero: false,
-                        grid: {
-                            color: '#e1e8ed'
+                        title: {
+                            display: true,
+                            text: 'Prix (€)'
                         },
-                        ticks: {
-                            color: '#6c757d',
-                            font: {
-                                size: 12
-                            }
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
                         }
                     }
                 },
                 elements: {
                     point: {
-                        radius: 0
+                        radius: 3,
+                        hoverRadius: 5
                     }
                 }
             }
         });
+    }
+
+    generateAnnualChartData(symbol) {
+        const labels = [];
+        const prices = [];
+        
+        for (let year = this.minYear; year <= this.currentYear; year++) {
+            labels.push(year.toString());
+            prices.push(this.annualData[symbol][year].price);
+        }
+        
+        return { labels, prices };
     }
 
     processTradeFromWindow(tradeData) {
@@ -617,6 +659,15 @@ class MarketSimulator {
             this.goBack();
         });
 
+        // Year navigation buttons
+        document.getElementById('prevYearBtn').addEventListener('click', () => {
+            this.changeYear(-1);
+        });
+
+        document.getElementById('nextYearBtn').addEventListener('click', () => {
+            this.changeYear(1);
+        });
+
         // Portfolio toggle buttons
         document.querySelectorAll('.toggle-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -837,38 +888,24 @@ class MarketSimulator {
         }
     }
 
-    startMarketSimulation() {
-        this.simulatePriceChanges();
-        this.renderStocks();
-        this.updatePortfolio();
-    }
-
-    simulatePriceChanges() {
-        this.stocks.forEach(stock => {
-            // Generate random price change (-2% to +2%)
-            const volatility = 0.02;
-            const randomChange = (Math.random() - 0.5) * volatility;
-            const newPrice = stock.price * (1 + randomChange);
-            
-            stock.change = newPrice - stock.price;
-            stock.changePercent = (stock.change / stock.price) * 100;
-            stock.price = newPrice;
-            
-            // Simulate volume changes
-            const volumeChange = (Math.random() - 0.5) * 0.1;
-            stock.volume = Math.max(1000000, stock.volume * (1 + volumeChange));
-
-            // Add to price history
-            this.priceHistory[stock.symbol].push({
-                time: new Date(),
-                price: newPrice
-            });
-
-            // Keep only last 100 data points
-            if (this.priceHistory[stock.symbol].length > 100) {
-                this.priceHistory[stock.symbol].shift();
+    updateTradingSection() {
+        if (this.selectedStock) {
+            const stock = this.stocks.find(s => s.symbol === this.selectedStock.symbol);
+            if (stock) {
+                document.getElementById('tradingInstrumentSymbol').textContent = stock.symbol;
+                document.getElementById('tradingInstrumentName').textContent = stock.name;
+                document.getElementById('tradingCurrentPrice').textContent = `€${stock.price.toFixed(2)}`;
+                
+                const changeClass = stock.change >= 0 ? 'positive' : 'negative';
+                const changeSymbol = stock.change >= 0 ? '+' : '';
+                document.getElementById('tradingPriceChange').textContent = 
+                    `${changeSymbol}€${stock.change.toFixed(2)} (${changeSymbol}${stock.changePercent.toFixed(2)}%)`;
+                document.getElementById('tradingPriceChange').className = `price-change ${changeClass}`;
+                
+                document.getElementById('tradingPrice').value = stock.price.toFixed(2);
+                this.updateTradingChart();
             }
-        });
+        }
     }
 
 
