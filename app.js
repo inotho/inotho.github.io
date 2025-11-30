@@ -62,6 +62,10 @@ const loadingProgressBar = document.getElementById('loading-progress-bar');
 // Initialize the application
 function init() {
     loadState();
+    // Ensure timelineIdx is initialized
+    if (state.timelineIdx === undefined || state.timelineIdx === null) {
+        state.timelineIdx = 0;
+    }
     if (!state.stocks || state.stocks.length === 0) {
         state.balance = INITIAL_BALANCE;
         state.timelineIdx = 0;
@@ -155,10 +159,23 @@ async function generateStocks() {
         }
     };
     
+    // Ensure timelineIdx is valid (use last valid index if out of bounds)
+    let validTimelineIdx = 0;
+    if (state.timelineIdx !== undefined && state.timelineIdx !== null && !isNaN(state.timelineIdx)) {
+        validTimelineIdx = Math.min(Math.max(0, state.timelineIdx), TIMELINE.length - 1);
+    }
+    let year = TIMELINE[validTimelineIdx];
+    
+    // Ensure year is defined (fallback to first year if invalid)
+    if (!year || isNaN(year)) {
+        console.warn('Year is invalid in generateStocks! Using year 1 as fallback');
+        year = TIMELINE[0]; // Fallback to first year
+    }
+    
     // Fetch all stock prices in parallel with progress tracking
     const stockPromises = marketData.map(async (company, index) => {
         try {
-            const basePrice = await getStockPrice(company.displayedSymbol, TIMELINE[state.timelineIdx], 5000);
+            const basePrice = await getStockPrice(company.displayedSymbol, year, 5000);
             updateProgress();
             return {
                 name: company.displayedName,
@@ -224,10 +241,26 @@ async function generateETFs() {
         }
     };
     
+    // Ensure timelineIdx is valid (use last valid index if out of bounds)
+    let validTimelineIdx = 0;
+    if (state.timelineIdx !== undefined && state.timelineIdx !== null && !isNaN(state.timelineIdx)) {
+        validTimelineIdx = Math.min(Math.max(0, state.timelineIdx), TIMELINE.length - 1);
+    }
+    let year = TIMELINE[validTimelineIdx];
+    
+    // Ensure year is defined (fallback to first year if invalid)
+    if (!year || isNaN(year)) {
+        console.warn('Year is invalid! timelineIdx:', state.timelineIdx, 'validTimelineIdx:', validTimelineIdx, 'TIMELINE:', TIMELINE, 'year:', year, '- Using year 1 as fallback');
+        year = TIMELINE[0]; // Fallback to first year
+    }
+    
     // Fetch all ETF prices in parallel with progress tracking
     const etfPromises = etfData.map(async (etf) => {
         try {
-            const basePrice = await getStockPrice(etf.displayedSymbol, TIMELINE[state.timelineIdx], 5000);
+            if (!year) {
+                throw new Error('Year is undefined');
+            }
+            const basePrice = await getStockPrice(etf.displayedSymbol, year, 5000);
             updateProgress();
             
             // Only return ETF if price is valid (not null, not 0, not undefined, and is a number)
@@ -287,12 +320,23 @@ function updateStockMap() {
 }
 
 async function advanceToNextYear() {
-    const previousYear = TIMELINE[state.timelineIdx];
-    state.timelineIdx++
+    // Ensure timelineIdx is valid before incrementing
+    const currentIdx = Math.min(Math.max(0, state.timelineIdx !== undefined && state.timelineIdx !== null ? state.timelineIdx : 0), TIMELINE.length - 1);
+    const previousYear = TIMELINE[currentIdx];
+    
+    // Check if we're already at the last year
+    if (currentIdx >= TIMELINE.length - 1) {
+        // Show results when already at year 25
+        showResults();
+        return;
+    }
+    
+    state.timelineIdx = currentIdx + 1;
+    
     if (state.timelineIdx >= TIMELINE.length) {
         // Show results when reaching year 25
         showResults();
-        return
+        return;
     }
     
     // Calculate years elapsed and add investment money
@@ -320,7 +364,13 @@ async function advanceToNextYear() {
     const stockPromises = state.stocks.map(async (stock) => {
         try {
             stock.previousPrice = stock.price;
-            const newPrice = await getStockPrice(stock.symbol, TIMELINE[state.timelineIdx]);
+            // Ensure timelineIdx is valid
+            let validTimelineIdx = Math.min(Math.max(0, state.timelineIdx || 0), TIMELINE.length - 1);
+            let year = TIMELINE[validTimelineIdx];
+            if (!year || isNaN(year)) {
+                year = TIMELINE[0]; // Fallback
+            }
+            const newPrice = await getStockPrice(stock.symbol, year);
             stock.price = parseFloat(newPrice.toFixed(2));
             stock.change = parseFloat((stock.price - stock.previousPrice).toFixed(2));
             stock.changePercent = parseFloat((((stock.price - stock.previousPrice) / stock.previousPrice) * 100).toFixed(2));
@@ -334,7 +384,13 @@ async function advanceToNextYear() {
     const etfPromises = (state.etfs || []).map(async (etf) => {
         try {
             etf.previousPrice = etf.price;
-            const newPrice = await getStockPrice(etf.displayedSymbol, TIMELINE[state.timelineIdx]);
+            // Ensure timelineIdx is valid
+            let validTimelineIdx = Math.min(Math.max(0, state.timelineIdx || 0), TIMELINE.length - 1);
+            let year = TIMELINE[validTimelineIdx];
+            if (!year || isNaN(year)) {
+                year = TIMELINE[0]; // Fallback
+            }
+            const newPrice = await getStockPrice(etf.displayedSymbol, year);
             // Only update if new price is valid
             if (newPrice !== null && newPrice !== undefined && !isNaN(newPrice) && newPrice > 0) {
                 etf.price = parseFloat(newPrice.toFixed(2));
@@ -449,6 +505,14 @@ function showResults() {
     loadingContainer.style.display = 'none';
     contentDiv.style.display = 'block';
     changeView('results');
+    
+    // Ensure reset button has event listener (re-attach in case it was lost)
+    const resultsResetBtnEl = document.getElementById('results-reset-btn');
+    if (resultsResetBtnEl && !resultsResetBtnEl.hasAttribute('data-listener-attached')) {
+        resultsResetBtnEl.addEventListener('click', resetApplication);
+        resultsResetBtnEl.setAttribute('data-listener-attached', 'true');
+    }
+    
     saveState();
 }
 
@@ -470,6 +534,7 @@ async function resetApplication() {
         portfolio: {},
         transactions: [],
         stocks: [],
+        etfs: [],
         currentView: 'dashboard',
         selectedStock: null,
         timelineIdx: 0,
@@ -556,6 +621,7 @@ function setupEventListeners() {
     // Results reset button
     if (resultsResetBtn) {
         resultsResetBtn.addEventListener('click', resetApplication);
+        resultsResetBtn.setAttribute('data-listener-attached', 'true');
     }
 }
 
