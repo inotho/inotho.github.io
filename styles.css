@@ -293,6 +293,10 @@ h3 {
     color: var(--danger-color);
 }
 
+.transaction-investment {
+    color: var(--primary-color);
+}
+
 .transaction-date {
     font-size: 0.8rem;
     opacity: 0.7;
@@ -548,6 +552,6 @@ h3 {
 
 @media (min-width: 1024px) {
     .results-summary {
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(4, 1fr);
     }
 }

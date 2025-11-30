@@ -1,7 +1,7 @@
 // Constants
-const INITIAL_BALANCE = 1000;
+const INITIAL_BALANCE = 1200;
 const INITIAL_YEAR = 1;
-const TIMELINE = [1, 3, 5, 10, 15, 25]
+const TIMELINE = [1, 2, 3, 5, 10, 15, 25]
 
 // State management
 let state = {
@@ -87,11 +87,31 @@ function init() {
         // Generate ETFs if not already loaded or if all were filtered out
         if (!state.etfs || state.etfs.length === 0) {
             generateETFs().then(() => {
-                updateUI();
+                // Update stock map after generating ETFs
+                updateStockMap();
+                // Check if we're at the last year and show results
+                if (state.timelineIdx >= TIMELINE.length - 1) {
+                    showResults();
+                } else {
+                    updateUI();
+                }
             });
+        } else {
+            // Check if we're at or past the last year and show results
+            // timelineIdx can be TIMELINE.length - 1 (at year 25) or TIMELINE.length (past year 25)
+            setupEventListeners();
+            
+            if (state.timelineIdx >= TIMELINE.length - 1) {
+                // Ensure stockMap is updated before showing results
+                updateStockMap();
+                // Use setTimeout to ensure DOM is ready
+                setTimeout(() => {
+                    showResults();
+                }, 0);
+            } else {
+                updateUI();
+            }
         }
-        updateUI();
-        setupEventListeners();
 
         loadingContainer.style.display = 'none';
         contentDiv.style.display = 'block';
@@ -267,12 +287,31 @@ function updateStockMap() {
 }
 
 async function advanceToNextYear() {
+    const previousYear = TIMELINE[state.timelineIdx];
     state.timelineIdx++
     if (state.timelineIdx >= TIMELINE.length) {
         // Show results when reaching year 25
         showResults();
         return
     }
+    
+    // Calculate years elapsed and add investment money
+    const currentYear = TIMELINE[state.timelineIdx];
+    const yearsElapsed = currentYear - previousYear;
+    const investmentAmount = 1200 * yearsElapsed;
+    state.balance += investmentAmount;
+    
+    // Record the investment as a transaction
+    if (investmentAmount > 0) {
+        state.transactions.push({
+            type: 'investment',
+            amount: investmentAmount,
+            years: yearsElapsed,
+            year: currentYear,
+            timestamp: Date.now()
+        });
+    }
+    
     loadingContainer.style.display = 'flex';
     contentDiv.style.display = 'none';
 
@@ -338,8 +377,15 @@ async function advanceToNextYear() {
 
 // Calculate and show results
 function showResults() {
-    // Calculate initial investment (sum of all buy transactions)
-    const initialInvestment = state.transactions
+    // Calculate total received (initial balance + all annual investments)
+    const annualInvestments = state.transactions
+        .filter(t => t.type === 'investment')
+        .reduce((sum, t) => sum + t.amount, 0);
+    
+    const totalReceived = INITIAL_BALANCE + annualInvestments;
+    
+    // Calculate total spent on purchases (sum of all buy transactions)
+    const totalSpent = state.transactions
         .filter(t => t.type === 'buy')
         .reduce((sum, t) => sum + t.total, 0);
     
@@ -356,24 +402,24 @@ function showResults() {
     // Calculate final value (portfolio + remaining cash)
     const finalValue = state.balance + portfolioValue;
     
-    // Calculate gains
-    const totalGains = finalValue - INITIAL_BALANCE;
+    // Calculate gains (final value - total received)
+    // This shows the gain from stock market performance
+    const totalGains = finalValue - totalReceived;
     
-    // Calculate ROI Total (Return on Initial Capital)
-    const roiTotal = INITIAL_BALANCE > 0 
-        ? ((totalGains / INITIAL_BALANCE) * 100) 
+    // Calculate ROI Total (Gain / Total Spent on Stock Purchases)
+    const roiTotal = totalSpent > 0 
+        ? ((totalGains / totalSpent) * 100) 
         : 0;
     
     // Calculate ROI Annuel (CAGR - Compound Annual Growth Rate)
     // Number of years: from year 1 to year 25 = 24 years
     const numberOfYears = TIMELINE[TIMELINE.length - 1] - TIMELINE[0];
-    const roiAnnual = INITIAL_BALANCE > 0 && finalValue > 0 && numberOfYears > 0
-        ? ((Math.pow(finalValue / INITIAL_BALANCE, 1 / numberOfYears) - 1) * 100)
+    const roiAnnual = totalSpent > 0 && finalValue > 0 && numberOfYears > 0
+        ? ((Math.pow(finalValue / totalReceived, 1 / numberOfYears) - 1) * 100)
         : 0;
     
     // Update results display
     const initialInvestmentEl = document.getElementById('initial-investment');
-    const finalValueEl = document.getElementById('final-value');
     const totalGainsEl = document.getElementById('total-gains');
     const roiTotalEl = document.getElementById('roi-total');
     const roiAnnualEl = document.getElementById('roi-annual');
@@ -381,8 +427,8 @@ function showResults() {
     const remainingCashEl = document.getElementById('remaining-cash');
     const finalPortfolioValueEl = document.getElementById('final-portfolio-value');
     
-    if (initialInvestmentEl) initialInvestmentEl.textContent = formatCurrency(initialInvestment);
-    if (finalValueEl) finalValueEl.textContent = formatCurrency(finalValue);
+    // Display total spent on stock purchases
+    if (initialInvestmentEl) initialInvestmentEl.textContent = formatCurrency(totalSpent);
     if (totalGainsEl) {
         totalGainsEl.textContent = formatCurrency(totalGains);
         totalGainsEl.className = totalGains >= 0 ? 'positive' : 'negative';
@@ -740,17 +786,35 @@ function renderTransactionHistory() {
     
     sortedTransactions.forEach(transaction => {
         const li = document.createElement('li');
-        li.innerHTML = `
-            <div class="transaction-info">
-                <div class="transaction-type ${transaction.type === 'buy' ? 'transaction-buy' : 'transaction-sell'}">
-                    ${transaction.type === 'buy' ? 'Acheté' : 'Vendy'} ${transaction.quantity} ${transaction.symbol}
+        let content = '';
+        
+        if (transaction.type === 'investment') {
+            content = `
+                <div class="transaction-info">
+                    <div class="transaction-type transaction-investment">
+                        Investissement annuel: ${formatCurrency(transaction.amount)}
+                    </div>
+                    <div class="transaction-details">
+                        ${transaction.years} année${transaction.years > 1 ? 's' : ''} écoulée${transaction.years > 1 ? 's' : ''}
+                    </div>
+                    <div class="transaction-date">Année ${transaction.year}</div>
                 </div>
-                <div class="transaction-details">
-                    à ${formatCurrency(transaction.price)} par action (${formatCurrency(transaction.total)})
+            `;
+        } else {
+            content = `
+                <div class="transaction-info">
+                    <div class="transaction-type ${transaction.type === 'buy' ? 'transaction-buy' : 'transaction-sell'}">
+                        ${transaction.type === 'buy' ? 'Acheté' : 'Vendu'} ${transaction.quantity} ${transaction.symbol}
+                    </div>
+                    <div class="transaction-details">
+                        à ${formatCurrency(transaction.price)} par action (${formatCurrency(transaction.total)})
+                    </div>
+                    <div class="transaction-date">Année ${transaction.year}</div>
                 </div>
-                <div class="transaction-date">Année ${transaction.year}}</div>
-            </div>
-        `;
+            `;
+        }
+        
+        li.innerHTML = content;
         transactionHistoryEl.appendChild(li);
     });
 }
@@ -771,12 +835,25 @@ function renderRecentTransactions() {
     
     recentTransactions.forEach(transaction => {
         const li = document.createElement('li');
-        li.innerHTML = `
-            <div class="transaction-type ${transaction.type === 'buy' ? 'transaction-buy' : 'transaction-sell'}">
-                ${transaction.type === 'buy' ? 'Acheté' : 'Vendu'} ${transaction.quantity} ${transaction.symbol}
-            </div>
-            <div class="transaction-date">Année ${transaction.year}</div>
-        `;
+        let content = '';
+        
+        if (transaction.type === 'investment') {
+            content = `
+                <div class="transaction-type transaction-investment">
+                    Investissement: ${formatCurrency(transaction.amount)}
+                </div>
+                <div class="transaction-date">Année ${transaction.year}</div>
+            `;
+        } else {
+            content = `
+                <div class="transaction-type ${transaction.type === 'buy' ? 'transaction-buy' : 'transaction-sell'}">
+                    ${transaction.type === 'buy' ? 'Acheté' : 'Vendu'} ${transaction.quantity} ${transaction.symbol}
+                </div>
+                <div class="transaction-date">Année ${transaction.year}</div>
+            `;
+        }
+        
+        li.innerHTML = content;
         recentTransactionsEl.appendChild(li);
     });
 }
