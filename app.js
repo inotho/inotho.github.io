@@ -1,7 +1,7 @@
 // Constants
 const INITIAL_BALANCE = 1200;
-const INITIAL_YEAR = 1;
-const TIMELINE = [1, 2, 3, 5, 10, 15, 25]
+const TIMELINE = [1, 2, 3, 5, 10, 15, 25];
+const ANNUAL_INVESTMENT = 1200;
 
 // State management
 let state = {
@@ -13,6 +13,8 @@ let state = {
     currentView: 'dashboard',
     selectedStock: null,
     timelineIdx: 0,
+    course: null, // 'introduction' or 'strategie'
+    courseVersion: null, // Track course changes
 };
 
 // Cache for stock lookups (Map for O(1) access)
@@ -58,68 +60,209 @@ const resultsResetBtn = document.getElementById('results-reset-btn');
 const currentDateEl = document.getElementById('current-date');
 const loadingText = document.getElementById('loading-text');
 const loadingProgressBar = document.getElementById('loading-progress-bar');
+const homepage = document.getElementById('homepage');
+const courseCards = document.querySelectorAll('.course-card');
+
+// Helper functions
+function getValidTimelineIdx() {
+    if (state.timelineIdx === undefined || state.timelineIdx === null || isNaN(state.timelineIdx)) {
+        return 0;
+    }
+    return Math.min(Math.max(0, state.timelineIdx), TIMELINE.length - 1);
+}
+
+function getYearForTimelineIdx(timelineIdx) {
+    const validIdx = Math.min(Math.max(0, timelineIdx || 0), TIMELINE.length - 1);
+    const year = TIMELINE[validIdx];
+    return year && !isNaN(year) ? year : TIMELINE[0];
+}
+
+function isAtEndOfTimeline() {
+    return state.timelineIdx >= TIMELINE.length - 1;
+}
 
 // Initialize the application
 function init() {
     loadState();
-    // Ensure timelineIdx is initialized
-    if (state.timelineIdx === undefined || state.timelineIdx === null) {
-        state.timelineIdx = 0;
+    
+    // Check if we need to reset (at year 25 or course version mismatch)
+    const isAtEnd = isAtEndOfTimeline();
+    const needsReset = isAtEnd || !state.courseVersion;
+    
+    // Always reset if at year 25 - don't show results on page load
+    if (isAtEnd && state.course) {
+        // Force reset - clear localStorage first
+        localStorage.removeItem('marketSimState');
+        // Create a completely fresh state
+        state = {
+            balance: INITIAL_BALANCE,
+            portfolio: {},
+            transactions: [],
+            stocks: [],
+            etfs: [],
+            currentView: 'dashboard',
+            selectedStock: null,
+            timelineIdx: 0,
+            course: state.course, // Keep the course
+            courseVersion: Date.now(),
+        };
+        // Clear stock map cache
+        stockMap.clear();
+        // Force regeneration by calling showApplication
+        showApplication();
+        return; // Exit early
     }
-    if (!state.stocks || state.stocks.length === 0) {
-        state.balance = INITIAL_BALANCE;
-        state.timelineIdx = 0;
-        Promise.all([generateStocks(), generateETFs()]).then(() => {
-            updateUI();
-            setupEventListeners();
-
-            loadingContainer.style.display = 'none';
-            contentDiv.style.display = 'block';
-        })
+    
+    // Check if course is already selected
+    if (state.course) {
+        // Normal case: show the main application
+        // showApplication() will handle regeneration if needed
+        showApplication();
     } else {
-        // Update stock map cache for loaded stocks
-        updateStockMap();
-        // Filter out ETFs with invalid prices from loaded state
-        if (state.etfs && state.etfs.length > 0) {
-            state.etfs = state.etfs.filter(etf => 
-                etf.price !== null && 
-                etf.price !== undefined && 
-                !isNaN(etf.price) && 
-                etf.price > 0
-            );
-        }
-        // Generate ETFs if not already loaded or if all were filtered out
-        if (!state.etfs || state.etfs.length === 0) {
-            generateETFs().then(() => {
-                // Update stock map after generating ETFs
-                updateStockMap();
-                // Check if we're at the last year and show results
-                if (state.timelineIdx >= TIMELINE.length - 1) {
-                    showResults();
-                } else {
-                    updateUI();
-                }
-            });
-        } else {
-            // Check if we're at or past the last year and show results
-            // timelineIdx can be TIMELINE.length - 1 (at year 25) or TIMELINE.length (past year 25)
-            setupEventListeners();
-            
-            if (state.timelineIdx >= TIMELINE.length - 1) {
-                // Ensure stockMap is updated before showing results
-                updateStockMap();
-                // Use setTimeout to ensure DOM is ready
-                setTimeout(() => {
-                    showResults();
-                }, 0);
-            } else {
-                updateUI();
-            }
-        }
+        // Show homepage for course selection
+        showHomepage();
+    }
+}
 
+// Show homepage
+function showHomepage() {
+    if (homepage) {
+        homepage.style.display = 'flex';
+    }
+    if (contentDiv) {
+        contentDiv.style.display = 'none';
+    }
+    if (loadingContainer) {
+        loadingContainer.style.display = 'none';
+    }
+    
+    // Add event listeners to course cards (only once)
+    courseCards.forEach(card => {
+        const btn = card.querySelector('.course-btn');
+        if (btn && !btn.hasAttribute('data-listener-attached')) {
+            btn.addEventListener('click', () => {
+                const course = card.getAttribute('data-course');
+                selectCourse(course);
+            });
+            btn.setAttribute('data-listener-attached', 'true');
+        }
+    });
+}
+
+// Select course and start application
+function selectCourse(course) {
+    // Clear all previous data when selecting a course
+    // This is critical to prevent loading stale data
+    localStorage.removeItem('marketSimState');
+    
+    // Generate a new version identifier for this course selection
+    const courseVersion = Date.now();
+    
+    // Reset state completely - create a fresh state object
+    // IMPORTANT: Create a completely new object to break any references
+    state = {
+        balance: INITIAL_BALANCE,
+        portfolio: {},
+        transactions: [],
+        stocks: [],
+        etfs: [],
+        currentView: 'dashboard',
+        selectedStock: null,
+        timelineIdx: 0, // Always start at year 1
+        course: course,
+        courseVersion: courseVersion, // Track this course selection
+    };
+    
+    // Force clear any cached data
+    stockMap.clear();
+    
+    // Clear any pending save state timer
+    if (saveStateTimer) {
+        clearTimeout(saveStateTimer);
+        saveStateTimer = null;
+    }
+    
+    // Don't save state yet - wait until data is generated
+    // This ensures we don't load stale data on next init
+    showApplication();
+}
+
+// Show main application
+function showApplication() {
+    // Hide homepage first
+    if (homepage) {
+        homepage.style.display = 'none';
+    }
+    
+    // Ensure content is hidden during loading
+    if (contentDiv) {
+        contentDiv.style.display = 'none';
+    }
+    
+    // If we were at the end, clear localStorage to prevent stale data
+    if (isAtEndOfTimeline()) {
+        localStorage.removeItem('marketSimState');
+    }
+    
+    // Always regenerate data when showing application to ensure fresh start
+    // Clear existing data first and reset everything
+    state.stocks = [];
+    state.etfs = [];
+    state.portfolio = {};
+    state.transactions = [];
+    state.balance = INITIAL_BALANCE;
+    state.timelineIdx = 0; // Always start at year 1
+    state.currentView = 'dashboard'; // Always start at dashboard view
+    
+    // Update course version to track this session
+    if (!state.courseVersion) {
+        state.courseVersion = Date.now();
+    }
+    
+    // Clear stock map cache to ensure fresh lookups
+    stockMap.clear();
+    
+    // Clear any pending save state timer
+    if (saveStateTimer) {
+        clearTimeout(saveStateTimer);
+        saveStateTimer = null;
+    }
+    
+    // Show loading screen
+    loadingContainer.style.display = 'flex';
+    
+    // Generate data based on selected course
+    const promises = [];
+    if (state.course === 'introduction') {
+        // Introduction course: only stocks
+        promises.push(generateStocks());
+        state.etfs = []; // Clear ETFs
+    } else if (state.course === 'strategie') {
+        // Strategie course: only ETFs
+        promises.push(generateETFs());
+        state.stocks = []; // Clear stocks
+    } else {
+        // Fallback: generate both
+        promises.push(generateStocks(), generateETFs());
+    }
+    
+    Promise.all(promises).then(() => {
+        updateStockMap();
+        
+        // IMPORTANT: Change view to dashboard to hide results view
+        changeView('dashboard');
+        
+        updateUI();
+        setupEventListeners();
+        updateNavigationForCourse();
+        
+        // Save state after data is generated
+        saveState();
+
+        // Hide loading and show content
         loadingContainer.style.display = 'none';
         contentDiv.style.display = 'block';
-    }
+    });
 }
 
 // Load state from localStorage
@@ -132,6 +275,11 @@ function loadState() {
 
 // Save state to localStorage with debouncing
 function saveState() {
+    // Don't save state if we're at year 25 - this prevents reloading into results view
+    if (state.timelineIdx >= TIMELINE.length - 1) {
+        return;
+    }
+    
     // Clear existing timer
     if (saveStateTimer) {
         clearTimeout(saveStateTimer);
@@ -159,18 +307,7 @@ async function generateStocks() {
         }
     };
     
-    // Ensure timelineIdx is valid (use last valid index if out of bounds)
-    let validTimelineIdx = 0;
-    if (state.timelineIdx !== undefined && state.timelineIdx !== null && !isNaN(state.timelineIdx)) {
-        validTimelineIdx = Math.min(Math.max(0, state.timelineIdx), TIMELINE.length - 1);
-    }
-    let year = TIMELINE[validTimelineIdx];
-    
-    // Ensure year is defined (fallback to first year if invalid)
-    if (!year || isNaN(year)) {
-        console.warn('Year is invalid in generateStocks! Using year 1 as fallback');
-        year = TIMELINE[0]; // Fallback to first year
-    }
+    const year = getYearForTimelineIdx(state.timelineIdx);
     
     // Fetch all stock prices in parallel with progress tracking
     const stockPromises = marketData.map(async (company, index) => {
@@ -241,18 +378,7 @@ async function generateETFs() {
         }
     };
     
-    // Ensure timelineIdx is valid (use last valid index if out of bounds)
-    let validTimelineIdx = 0;
-    if (state.timelineIdx !== undefined && state.timelineIdx !== null && !isNaN(state.timelineIdx)) {
-        validTimelineIdx = Math.min(Math.max(0, state.timelineIdx), TIMELINE.length - 1);
-    }
-    let year = TIMELINE[validTimelineIdx];
-    
-    // Ensure year is defined (fallback to first year if invalid)
-    if (!year || isNaN(year)) {
-        console.warn('Year is invalid! timelineIdx:', state.timelineIdx, 'validTimelineIdx:', validTimelineIdx, 'TIMELINE:', TIMELINE, 'year:', year, '- Using year 1 as fallback');
-        year = TIMELINE[0]; // Fallback to first year
-    }
+    const year = getYearForTimelineIdx(state.timelineIdx);
     
     // Fetch all ETF prices in parallel with progress tracking
     const etfPromises = etfData.map(async (etf) => {
@@ -320,21 +446,19 @@ function updateStockMap() {
 }
 
 async function advanceToNextYear() {
-    // Ensure timelineIdx is valid before incrementing
-    const currentIdx = Math.min(Math.max(0, state.timelineIdx !== undefined && state.timelineIdx !== null ? state.timelineIdx : 0), TIMELINE.length - 1);
+    const currentIdx = getValidTimelineIdx();
     const previousYear = TIMELINE[currentIdx];
     
     // Check if we're already at the last year
     if (currentIdx >= TIMELINE.length - 1) {
-        // Show results when already at year 25
         showResults();
         return;
     }
     
     state.timelineIdx = currentIdx + 1;
     
+    // Check if we've reached the end
     if (state.timelineIdx >= TIMELINE.length) {
-        // Show results when reaching year 25
         showResults();
         return;
     }
@@ -342,7 +466,7 @@ async function advanceToNextYear() {
     // Calculate years elapsed and add investment money
     const currentYear = TIMELINE[state.timelineIdx];
     const yearsElapsed = currentYear - previousYear;
-    const investmentAmount = 1200 * yearsElapsed;
+    const investmentAmount = ANNUAL_INVESTMENT * yearsElapsed;
     state.balance += investmentAmount;
     
     // Record the investment as a transaction
@@ -359,53 +483,33 @@ async function advanceToNextYear() {
     loadingContainer.style.display = 'flex';
     contentDiv.style.display = 'none';
 
-    // Fetch all stock prices in parallel - using map instead of forEach
-    // forEach doesn't properly handle async operations
-    const stockPromises = state.stocks.map(async (stock) => {
+    // Helper function to update stock/ETF price
+    const updatePrice = async (item, symbol, isETF = false) => {
         try {
-            stock.previousPrice = stock.price;
-            // Ensure timelineIdx is valid
-            let validTimelineIdx = Math.min(Math.max(0, state.timelineIdx || 0), TIMELINE.length - 1);
-            let year = TIMELINE[validTimelineIdx];
-            if (!year || isNaN(year)) {
-                year = TIMELINE[0]; // Fallback
-            }
-            const newPrice = await getStockPrice(stock.symbol, year);
-            stock.price = parseFloat(newPrice.toFixed(2));
-            stock.change = parseFloat((stock.price - stock.previousPrice).toFixed(2));
-            stock.changePercent = parseFloat((((stock.price - stock.previousPrice) / stock.previousPrice) * 100).toFixed(2));
-        } catch (error) {
-            console.error(`Failed to update price for ${stock.symbol}:`, error);
-            // Keep the previous price if update fails
-        }
-    });
-    
-    // Also update ETF prices
-    const etfPromises = (state.etfs || []).map(async (etf) => {
-        try {
-            etf.previousPrice = etf.price;
-            // Ensure timelineIdx is valid
-            let validTimelineIdx = Math.min(Math.max(0, state.timelineIdx || 0), TIMELINE.length - 1);
-            let year = TIMELINE[validTimelineIdx];
-            if (!year || isNaN(year)) {
-                year = TIMELINE[0]; // Fallback
-            }
-            const newPrice = await getStockPrice(etf.displayedSymbol, year);
-            // Only update if new price is valid
+            item.previousPrice = item.price;
+            const year = getYearForTimelineIdx(state.timelineIdx);
+            const newPrice = await getStockPrice(symbol, year);
+            
             if (newPrice !== null && newPrice !== undefined && !isNaN(newPrice) && newPrice > 0) {
-                etf.price = parseFloat(newPrice.toFixed(2));
-                etf.change = parseFloat((etf.price - etf.previousPrice).toFixed(2));
-                etf.changePercent = parseFloat((((etf.price - etf.previousPrice) / etf.previousPrice) * 100).toFixed(2));
-            } else {
-                // Mark ETF as invalid by setting price to null
-                etf.price = null;
+                item.price = parseFloat(newPrice.toFixed(2));
+                item.change = parseFloat((item.price - item.previousPrice).toFixed(2));
+                item.changePercent = parseFloat((((item.price - item.previousPrice) / item.previousPrice) * 100).toFixed(2));
+            } else if (isETF) {
+                item.price = null;
             }
         } catch (error) {
-            console.error(`Failed to update price for ETF ${etf.displayedSymbol}:`, error);
-            // Mark ETF as invalid by setting price to null
-            etf.price = null;
+            console.error(`Failed to update price for ${symbol}:`, error);
+            if (isETF) {
+                item.price = null;
+            }
         }
-    });
+    };
+    
+    // Fetch all stock prices in parallel
+    const stockPromises = state.stocks.map(stock => updatePrice(stock, stock.symbol, false));
+    
+    // Update ETF prices
+    const etfPromises = (state.etfs || []).map(etf => updatePrice(etf, etf.displayedSymbol, true));
     
     await Promise.all(etfPromises);
     
@@ -513,7 +617,9 @@ function showResults() {
         resultsResetBtnEl.setAttribute('data-listener-attached', 'true');
     }
     
-    saveState();
+    // Don't save state when showing results - this prevents reloading into results view
+    // The user should use the "Recommencer" button to restart
+    // saveState();
 }
 
 // Reset the application to initial state
@@ -522,13 +628,10 @@ async function resetApplication() {
         return;
     }
     
-    loadingContainer.style.display = 'flex';
-    contentDiv.style.display = 'none';
-    
     // Clear localStorage
     localStorage.removeItem('marketSimState');
     
-    // Reset state to initial values
+    // Reset state to initial values (including course selection)
     state = {
         balance: INITIAL_BALANCE,
         portfolio: {},
@@ -538,6 +641,8 @@ async function resetApplication() {
         currentView: 'dashboard',
         selectedStock: null,
         timelineIdx: 0,
+        course: null, // Reset course selection to show homepage
+        courseVersion: null, // Reset course version
     };
     
     // Close modal if open
@@ -545,20 +650,81 @@ async function resetApplication() {
         stockModal.style.display = 'none';
     }
     
-    // Regenerate stocks and ETFs
-    await Promise.all([generateStocks(), generateETFs()]);
+    // Hide content and loading, show homepage
+    if (contentDiv) {
+        contentDiv.style.display = 'none';
+    }
+    if (loadingContainer) {
+        loadingContainer.style.display = 'none';
+    }
     
-    // Update stock map cache
-    updateStockMap();
+    // Show homepage to choose course again
+    showHomepage();
+}
+
+// Update navigation based on selected course
+function updateNavigationForCourse() {
+    if (!navButtons) return;
     
-    // Update UI
-    updateUI();
+    navButtons.forEach(button => {
+        const view = button.getAttribute('data-view');
+        if (state.course === 'introduction') {
+            // Introduction: hide ETF button, show market button
+            if (view === 'etf') {
+                button.style.display = 'none';
+            } else {
+                button.style.display = 'inline-block';
+            }
+        } else if (state.course === 'strategie') {
+            // Strategie: hide market button, show ETF button
+            if (view === 'market') {
+                button.style.display = 'none';
+            } else {
+                button.style.display = 'inline-block';
+            }
+        } else {
+            // Fallback: show all
+            button.style.display = 'inline-block';
+        }
+    });
     
-    // Reset view to dashboard
-    changeView('dashboard');
+    // Hide/show views based on course
+    const marketView = document.getElementById('market');
+    const etfView = document.getElementById('etf');
     
-    loadingContainer.style.display = 'none';
-    contentDiv.style.display = 'block';
+    if (state.course === 'introduction') {
+        // Introduction: hide ETF view
+        if (etfView) {
+            etfView.style.display = 'none';
+        }
+        if (marketView) {
+            marketView.style.display = '';
+        }
+        // If currently viewing ETF, switch to dashboard
+        if (state.currentView === 'etf') {
+            changeView('dashboard');
+        }
+    } else if (state.course === 'strategie') {
+        // Strategie: hide market view
+        if (marketView) {
+            marketView.style.display = 'none';
+        }
+        if (etfView) {
+            etfView.style.display = '';
+        }
+        // If currently viewing market, switch to dashboard
+        if (state.currentView === 'market') {
+            changeView('dashboard');
+        }
+    } else {
+        // Fallback: show all views
+        if (marketView) {
+            marketView.style.display = '';
+        }
+        if (etfView) {
+            etfView.style.display = '';
+        }
+    }
 }
 
 // Setup event listeners
@@ -658,7 +824,7 @@ function updateUI() {
     currentDateEl.textContent = `Année ${TIMELINE[state.timelineIdx]}`;
     
     // Show reset button only at year 25 (last year in timeline)
-    const isLastYear = state.timelineIdx >= TIMELINE.length - 1;
+    const isLastYear = isAtEndOfTimeline();
     resetBtn.style.display = isLastYear ? 'inline-block' : 'none';
     nextDayBtn.style.display = isLastYear ? 'none' : 'inline-block';
     
@@ -676,10 +842,16 @@ function updateUI() {
             updatePortfolioValue();
             break;
         case 'market':
-            renderStockList();
+            // Only render if course is introduction or both
+            if (state.course === 'introduction' || !state.course) {
+                renderStockList();
+            }
             break;
         case 'etf':
-            renderETFList();
+            // Only render if course is strategie or both
+            if (state.course === 'strategie' || !state.course) {
+                renderETFList();
+            }
             break;
         case 'portfolio':
             renderPortfolioList();
