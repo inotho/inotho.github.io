@@ -9,6 +9,10 @@
 <body>
     <div id="loader-container">
         <div class="loader" id="loadingCircle"></div>
+        <p id="loading-text">Chargement...</p>
+        <div id="loading-progress">
+            <div id="loading-progress-bar"></div>
+        </div>
     </div>
     <div id="content">
     <header>
@@ -20,7 +24,8 @@
 
     <nav>
         <button class="nav-btn active" data-view="dashboard">Dashboard</button>
-        <button class="nav-btn" data-view="market">Marchés</button>
+        <button class="nav-btn" data-view="market">Actions</button>
+        <button class="nav-btn" data-view="etf">ETFs</button>
         <button class="nav-btn" data-view="portfolio">Positions</button>
         <button class="nav-btn" data-view="history">Historique</button>
     </nav>
@@ -64,13 +69,25 @@
 
         <!-- Market View -->
         <section id="market" class="view">
-            <h2>Marchés</h2>
+            <h2>Actions</h2>
             <div class="search-container">
                 <input type="text" id="stock-search" placeholder="Rechercher des actions...">
             </div>
             <ul id="stock-list" class="stock-list">
                 <!-- Stock items will be populated here -->
                 <li class="loading">Chargement des actions...</li>
+            </ul>
+        </section>
+
+        <!-- ETF View -->
+        <section id="etf" class="view">
+            <h2>ETFs</h2>
+            <div class="search-container">
+                <input type="text" id="etf-search" placeholder="Rechercher des ETFs...">
+            </div>
+            <ul id="etf-list" class="stock-list">
+                <!-- ETF items will be populated here -->
+                <li class="loading">Chargement des ETFs...</li>
             </ul>
         </section>
 
@@ -128,6 +145,7 @@
     </div>
     </div>
     <script src="marketData.js"></script>
+    <script src="etfData.js"></script>
     <script src="witsoClient.js"></script>
     <script src="app.js"></script>
 </body>

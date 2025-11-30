@@ -9,6 +9,7 @@ let state = {
     portfolio: {},
     transactions: [],
     stocks: [],
+    etfs: [],
     currentView: 'dashboard',
     selectedStock: null,
     timelineIdx: 0,
@@ -49,9 +50,13 @@ const sellButton = document.getElementById('sell-button');
 const ownedQuantityEl = document.getElementById('owned-quantity');
 const ownedValueEl = document.getElementById('owned-value');
 const stockSearchInput = document.getElementById('stock-search');
+const etfSearchInput = document.getElementById('etf-search');
+const etfListEl = document.getElementById('etf-list');
 const nextDayBtn = document.getElementById('next-day-btn');
 const resetBtn = document.getElementById('reset-btn');
 const currentDateEl = document.getElementById('current-date');
+const loadingText = document.getElementById('loading-text');
+const loadingProgressBar = document.getElementById('loading-progress-bar');
 
 // Initialize the application
 function init() {
@@ -59,7 +64,7 @@ function init() {
     if (!state.stocks || state.stocks.length === 0) {
         state.balance = INITIAL_BALANCE;
         state.timelineIdx = 0;
-        generateStocks().then(() => {
+        Promise.all([generateStocks(), generateETFs()]).then(() => {
             updateUI();
             setupEventListeners();
 
@@ -69,6 +74,21 @@ function init() {
     } else {
         // Update stock map cache for loaded stocks
         updateStockMap();
+        // Filter out ETFs with invalid prices from loaded state
+        if (state.etfs && state.etfs.length > 0) {
+            state.etfs = state.etfs.filter(etf => 
+                etf.price !== null && 
+                etf.price !== undefined && 
+                !isNaN(etf.price) && 
+                etf.price > 0
+            );
+        }
+        // Generate ETFs if not already loaded or if all were filtered out
+        if (!state.etfs || state.etfs.length === 0) {
+            generateETFs().then(() => {
+                updateUI();
+            });
+        }
         updateUI();
         setupEventListeners();
 
@@ -99,11 +119,26 @@ function saveState() {
 
 // Generate fake stocks
 async function generateStocks() {
-    // Fetch all stock prices in parallel instead of sequentially
-    // This reduces load time from ~20-40 seconds to ~1-2 seconds
-    const stockPromises = marketData.map(async (company) => {
+    const totalStocks = marketData.length;
+    let loadedCount = 0;
+    
+    // Update loading progress
+    const updateProgress = () => {
+        loadedCount++;
+        const progress = Math.min((loadedCount / totalStocks) * 100, 100);
+        if (loadingText) {
+            loadingText.textContent = `Chargement ${loadedCount}/${totalStocks} actions...`;
+        }
+        if (loadingProgressBar) {
+            loadingProgressBar.style.width = `${progress}%`;
+        }
+    };
+    
+    // Fetch all stock prices in parallel with progress tracking
+    const stockPromises = marketData.map(async (company, index) => {
         try {
-            const basePrice = await getStockPrice(company.displayedSymbol, TIMELINE[state.timelineIdx]);
+            const basePrice = await getStockPrice(company.displayedSymbol, TIMELINE[state.timelineIdx], 5000);
+            updateProgress();
             return {
                 name: company.displayedName,
                 symbol: company.displayedSymbol,
@@ -115,6 +150,7 @@ async function generateStocks() {
             };
         } catch (error) {
             console.error(`Failed to fetch price for ${company.displayedSymbol}:`, error);
+            updateProgress();
             // Return a default stock with price 0 if API fails
             return {
                 name: company.displayedName,
@@ -128,9 +164,87 @@ async function generateStocks() {
         }
     });
     
-    state.stocks = await Promise.all(stockPromises);
+    // Use allSettled to not block on errors and get results faster
+    const results = await Promise.allSettled(stockPromises);
+    state.stocks = results.map((result, index) => 
+        result.status === 'fulfilled' ? result.value : {
+            name: marketData[index].displayedName,
+            symbol: marketData[index].displayedSymbol,
+            description: marketData[index].description,
+            price: 0,
+            previousPrice: 0,
+            change: 0,
+            changePercent: 0
+        }
+    );
+    
     // Update stock map cache
     updateStockMap();
+}
+
+// Generate ETFs
+async function generateETFs() {
+    if (!etfData || etfData.length === 0) return;
+    
+    const totalETFs = etfData.length;
+    let loadedCount = 0;
+    
+    // Update loading progress (combined with stocks)
+    const updateProgress = () => {
+        loadedCount++;
+        const totalItems = marketData.length + totalETFs;
+        const currentLoaded = (marketData.length || 0) + loadedCount;
+        const progress = Math.min((currentLoaded / totalItems) * 100, 100);
+        if (loadingText) {
+            loadingText.textContent = `Chargement ${currentLoaded}/${totalItems} titres...`;
+        }
+        if (loadingProgressBar) {
+            loadingProgressBar.style.width = `${progress}%`;
+        }
+    };
+    
+    // Fetch all ETF prices in parallel with progress tracking
+    const etfPromises = etfData.map(async (etf) => {
+        try {
+            const basePrice = await getStockPrice(etf.displayedSymbol, TIMELINE[state.timelineIdx], 5000);
+            updateProgress();
+            
+            // Only return ETF if price is valid (not null, not 0, not undefined, and is a number)
+            const isValidPrice = basePrice !== null && 
+                                basePrice !== undefined && 
+                                !isNaN(basePrice) && 
+                                typeof basePrice === 'number' &&
+                                basePrice > 0;
+            
+            if (isValidPrice) {
+                return {
+                    name: etf.name,
+                    displayedSymbol: etf.displayedSymbol,
+                    symbol: etf.symbol,
+                    description: etf.description,
+                    price: parseFloat(basePrice.toFixed(2)),
+                    previousPrice: parseFloat(basePrice.toFixed(2)),
+                    change: 0,
+                    changePercent: 0,
+                    isETF: true
+                };
+            } else {
+                console.warn(`No valid price data for ETF ${etf.displayedSymbol} (price: ${basePrice}), excluding from list`);
+                updateProgress();
+                return null; // Return null to filter out later
+            }
+        } catch (error) {
+            console.error(`Failed to fetch price for ETF ${etf.displayedSymbol}:`, error);
+            updateProgress();
+            return null; // Return null to filter out later
+        }
+    });
+    
+    // Use allSettled to not block on errors, then filter out null values
+    const results = await Promise.allSettled(etfPromises);
+    state.etfs = results
+        .map((result) => result.status === 'fulfilled' ? result.value : null)
+        .filter(etf => etf !== null); // Only keep ETFs with valid prices
 }
 
 // Update stock map cache for O(1) lookups
@@ -139,6 +253,16 @@ function updateStockMap() {
     state.stocks.forEach(stock => {
         stockMap.set(stock.symbol, stock);
     });
+    // Also add ETFs to the map (use displayedSymbol as key for consistency)
+    if (state.etfs) {
+        state.etfs.forEach(etf => {
+            stockMap.set(etf.displayedSymbol || etf.symbol, etf);
+            // Also add by symbol for backward compatibility
+            if (etf.displayedSymbol && etf.displayedSymbol !== etf.symbol) {
+                stockMap.set(etf.symbol, etf);
+            }
+        });
+    }
 }
 
 async function advanceToNextYear() {
@@ -151,7 +275,7 @@ async function advanceToNextYear() {
 
     // Fetch all stock prices in parallel - using map instead of forEach
     // forEach doesn't properly handle async operations
-    const promises = state.stocks.map(async (stock) => {
+    const stockPromises = state.stocks.map(async (stock) => {
         try {
             stock.previousPrice = stock.price;
             const newPrice = await getStockPrice(stock.symbol, TIMELINE[state.timelineIdx]);
@@ -164,7 +288,38 @@ async function advanceToNextYear() {
         }
     });
     
-    await Promise.all(promises);
+    // Also update ETF prices
+    const etfPromises = (state.etfs || []).map(async (etf) => {
+        try {
+            etf.previousPrice = etf.price;
+            const newPrice = await getStockPrice(etf.displayedSymbol, TIMELINE[state.timelineIdx]);
+            // Only update if new price is valid
+            if (newPrice !== null && newPrice !== undefined && !isNaN(newPrice) && newPrice > 0) {
+                etf.price = parseFloat(newPrice.toFixed(2));
+                etf.change = parseFloat((etf.price - etf.previousPrice).toFixed(2));
+                etf.changePercent = parseFloat((((etf.price - etf.previousPrice) / etf.previousPrice) * 100).toFixed(2));
+            } else {
+                // Mark ETF as invalid by setting price to null
+                etf.price = null;
+            }
+        } catch (error) {
+            console.error(`Failed to update price for ETF ${etf.displayedSymbol}:`, error);
+            // Mark ETF as invalid by setting price to null
+            etf.price = null;
+        }
+    });
+    
+    await Promise.all(etfPromises);
+    
+    // Filter out ETFs with invalid prices after update
+    state.etfs = (state.etfs || []).filter(etf => 
+        etf.price !== null && 
+        etf.price !== undefined && 
+        !isNaN(etf.price) && 
+        etf.price > 0
+    );
+    
+    await Promise.all([...stockPromises, ...etfPromises]);
     updateUI();
     loadingContainer.style.display = 'none';
     contentDiv.style.display = 'block';
@@ -199,8 +354,11 @@ async function resetApplication() {
         stockModal.style.display = 'none';
     }
     
-    // Regenerate stocks
-    await generateStocks();
+    // Regenerate stocks and ETFs
+    await Promise.all([generateStocks(), generateETFs()]);
+    
+    // Update stock map cache
+    updateStockMap();
     
     // Update UI
     updateUI();
@@ -256,6 +414,13 @@ function setupEventListeners() {
         renderStockList();
     });
     
+    // ETF search
+    if (etfSearchInput) {
+        etfSearchInput.addEventListener('input', () => {
+            renderETFList();
+        });
+    }
+    
     // Next day button
     nextDayBtn.addEventListener('click', advanceToNextYear);
     
@@ -309,6 +474,9 @@ function updateUI() {
             break;
         case 'market':
             renderStockList();
+            break;
+        case 'etf':
+            renderETFList();
             break;
         case 'portfolio':
             renderPortfolioList();
@@ -372,6 +540,56 @@ function renderStockList() {
     
     stockListEl.innerHTML = '';
     stockListEl.appendChild(fragment);
+}
+
+// Render ETF list
+function renderETFList() {
+    if (!etfListEl || !state.etfs) {
+        return;
+    }
+    
+    const searchTerm = etfSearchInput ? etfSearchInput.value.toLowerCase() : '';
+    // Filter out ETFs with invalid prices (null, 0, or NaN)
+    const validETFs = state.etfs.filter(etf => 
+        etf.price !== null && 
+        etf.price !== undefined && 
+        !isNaN(etf.price) && 
+        etf.price > 0
+    );
+    const filteredETFs = validETFs.filter(etf => 
+        etf.name.toLowerCase().includes(searchTerm) || 
+        (etf.displayedSymbol && etf.displayedSymbol.toLowerCase().includes(searchTerm)) ||
+        etf.symbol.toLowerCase().includes(searchTerm)
+    );
+    
+    // Use DocumentFragment to reduce reflows
+    const fragment = document.createDocumentFragment();
+    
+    if (filteredETFs.length === 0) {
+        etfListEl.innerHTML = '<li class="empty-state">Aucun ETF trouvé</li>';
+        return;
+    }
+    
+    filteredETFs.forEach(etf => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="stock-info">
+                <div class="stock-name">${etf.name}</div>
+                <div class="stock-symbol">${etf.displayedSymbol || etf.symbol}</div>
+            </div>
+            <div class="stock-price-info">
+                <div class="stock-price">${formatCurrency(etf.price)}</div>
+                <div class="stock-change ${etf.changePercent >= 0 ? 'positive' : 'negative'}">
+                    ${etf.changePercent >= 0 ? '+' : ''}${etf.changePercent}%
+                </div>
+            </div>
+        `;
+        li.addEventListener('click', () => openStockDetail(etf));
+        fragment.appendChild(li);
+    });
+    
+    etfListEl.innerHTML = '';
+    etfListEl.appendChild(fragment);
 }
 
 // Render portfolio list

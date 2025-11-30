@@ -1,4 +1,7 @@
-async function getStockPrice(symbol, year) {
+async function getStockPrice(symbol, year, timeout = 5000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
   try {
     const response = await fetch('https://kzj2f2akxbaxjjxi5qadz5cxzu0ztvow.lambda-url.eu-north-1.on.aws/', {
       method: 'POST',
@@ -11,7 +14,10 @@ async function getStockPrice(symbol, year) {
           year: year,
         }
       ),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -21,6 +27,10 @@ async function getStockPrice(symbol, year) {
     const data = await response.json();
     return data.price;
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout');
+    }
     throw error;
   }
 }
