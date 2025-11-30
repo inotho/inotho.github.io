@@ -54,6 +54,7 @@ const etfSearchInput = document.getElementById('etf-search');
 const etfListEl = document.getElementById('etf-list');
 const nextDayBtn = document.getElementById('next-day-btn');
 const resetBtn = document.getElementById('reset-btn');
+const resultsResetBtn = document.getElementById('results-reset-btn');
 const currentDateEl = document.getElementById('current-date');
 const loadingText = document.getElementById('loading-text');
 const loadingProgressBar = document.getElementById('loading-progress-bar');
@@ -268,6 +269,8 @@ function updateStockMap() {
 async function advanceToNextYear() {
     state.timelineIdx++
     if (state.timelineIdx >= TIMELINE.length) {
+        // Show results when reaching year 25
+        showResults();
         return
     }
     loadingContainer.style.display = 'flex';
@@ -320,9 +323,86 @@ async function advanceToNextYear() {
     );
     
     await Promise.all([...stockPromises, ...etfPromises]);
+    
+    // Check if we've reached the end
+    if (state.timelineIdx >= TIMELINE.length) {
+        showResults();
+        return;
+    }
+    
     updateUI();
     loadingContainer.style.display = 'none';
     contentDiv.style.display = 'block';
+    saveState();
+}
+
+// Calculate and show results
+function showResults() {
+    // Calculate initial investment (sum of all buy transactions)
+    const initialInvestment = state.transactions
+        .filter(t => t.type === 'buy')
+        .reduce((sum, t) => sum + t.total, 0);
+    
+    // Calculate current portfolio value
+    let portfolioValue = 0;
+    Object.keys(state.portfolio).forEach(symbol => {
+        const stock = stockMap.get(symbol);
+        if (stock) {
+            const quantity = state.portfolio[symbol];
+            portfolioValue += stock.price * quantity;
+        }
+    });
+    
+    // Calculate final value (portfolio + remaining cash)
+    const finalValue = state.balance + portfolioValue;
+    
+    // Calculate gains
+    const totalGains = finalValue - INITIAL_BALANCE;
+    
+    // Calculate ROI Total (Return on Initial Capital)
+    const roiTotal = INITIAL_BALANCE > 0 
+        ? ((totalGains / INITIAL_BALANCE) * 100) 
+        : 0;
+    
+    // Calculate ROI Annuel (CAGR - Compound Annual Growth Rate)
+    // Number of years: from year 1 to year 25 = 24 years
+    const numberOfYears = TIMELINE[TIMELINE.length - 1] - TIMELINE[0];
+    const roiAnnual = INITIAL_BALANCE > 0 && finalValue > 0 && numberOfYears > 0
+        ? ((Math.pow(finalValue / INITIAL_BALANCE, 1 / numberOfYears) - 1) * 100)
+        : 0;
+    
+    // Update results display
+    const initialInvestmentEl = document.getElementById('initial-investment');
+    const finalValueEl = document.getElementById('final-value');
+    const totalGainsEl = document.getElementById('total-gains');
+    const roiTotalEl = document.getElementById('roi-total');
+    const roiAnnualEl = document.getElementById('roi-annual');
+    const initialCapitalEl = document.getElementById('initial-capital');
+    const remainingCashEl = document.getElementById('remaining-cash');
+    const finalPortfolioValueEl = document.getElementById('final-portfolio-value');
+    
+    if (initialInvestmentEl) initialInvestmentEl.textContent = formatCurrency(initialInvestment);
+    if (finalValueEl) finalValueEl.textContent = formatCurrency(finalValue);
+    if (totalGainsEl) {
+        totalGainsEl.textContent = formatCurrency(totalGains);
+        totalGainsEl.className = totalGains >= 0 ? 'positive' : 'negative';
+    }
+    if (roiTotalEl) {
+        roiTotalEl.textContent = `${roiTotal >= 0 ? '+' : ''}${roiTotal.toFixed(2)}%`;
+        roiTotalEl.className = roiTotal >= 0 ? 'positive' : 'negative';
+    }
+    if (roiAnnualEl) {
+        roiAnnualEl.textContent = `${roiAnnual >= 0 ? '+' : ''}${roiAnnual.toFixed(2)}%`;
+        roiAnnualEl.className = roiAnnual >= 0 ? 'positive' : 'negative';
+    }
+    if (initialCapitalEl) initialCapitalEl.textContent = formatCurrency(INITIAL_BALANCE);
+    if (remainingCashEl) remainingCashEl.textContent = formatCurrency(state.balance);
+    if (finalPortfolioValueEl) finalPortfolioValueEl.textContent = formatCurrency(portfolioValue);
+    
+    // Hide loading and show results view
+    loadingContainer.style.display = 'none';
+    contentDiv.style.display = 'block';
+    changeView('results');
     saveState();
 }
 
@@ -426,6 +506,11 @@ function setupEventListeners() {
     
     // Reset button
     resetBtn.addEventListener('click', resetApplication);
+    
+    // Results reset button
+    if (resultsResetBtn) {
+        resultsResetBtn.addEventListener('click', resetApplication);
+    }
 }
 
 // Change current view
@@ -465,6 +550,12 @@ function updateUI() {
     resetBtn.style.display = isLastYear ? 'inline-block' : 'none';
     nextDayBtn.style.display = isLastYear ? 'none' : 'inline-block';
     
+    // If we're at the last year and not already showing results, show them
+    if (isLastYear && state.currentView !== 'results') {
+        showResults();
+        return;
+    }
+    
     // Only render the active view to improve performance
     switch (state.currentView) {
         case 'dashboard':
@@ -483,6 +574,9 @@ function updateUI() {
             break;
         case 'history':
             renderTransactionHistory();
+            break;
+        case 'results':
+            // Results view is handled by showResults()
             break;
     }
 }

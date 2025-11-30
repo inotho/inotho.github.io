@@ -106,6 +106,51 @@
                 <li class="empty-state">Aucun historique de transaction.</li>
             </ul>
         </section>
+
+        <!-- Results View -->
+        <section id="results" class="view">
+            <h2>Résultats de la Simulation</h2>
+            <div class="results-summary">
+                <div class="result-card">
+                    <h3>Investissements initiaux</h3>
+                    <p id="initial-investment">€0.00</p>
+                </div>
+                <div class="result-card">
+                    <h3>Valeur finale</h3>
+                    <p id="final-value">€0.00</p>
+                </div>
+                <div class="result-card">
+                    <h3>Gains</h3>
+                    <p id="total-gains">€0.00</p>
+                </div>
+                <div class="result-card">
+                    <h3>ROI Total</h3>
+                    <p id="roi-total">0.00%</p>
+                </div>
+                <div class="result-card">
+                    <h3>ROI Annuel</h3>
+                    <p id="roi-annual">0.00%</p>
+                </div>
+            </div>
+            <div class="results-details">
+                <h3>Détails</h3>
+                <div class="detail-item">
+                    <span>Capital initial:</span>
+                    <span id="initial-capital">€0.00</span>
+                </div>
+                <div class="detail-item">
+                    <span>Espèces restantes:</span>
+                    <span id="remaining-cash">€0.00</span>
+                </div>
+                <div class="detail-item">
+                    <span>Valeur du portefeuille:</span>
+                    <span id="final-portfolio-value">€0.00</span>
+                </div>
+            </div>
+            <div class="results-actions">
+                <button id="results-reset-btn" class="btn primary-btn">Recommencer</button>
+            </div>
+        </section>
     </main>
 
     <!-- Stock Detail Modal -->
